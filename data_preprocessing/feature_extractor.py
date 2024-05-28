@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import librosa.display
 
 class Feature_Extractor:
-    def __init__(self):
+    def __init__(self, max_duration_of_loaded_wav=60):
         """
         Can extract various features from wav files, returns them as a dict.
         Currently returns these keys : spec, mel, logmel, pcen, mfcc, delta_mfcc
@@ -18,6 +18,8 @@ class Feature_Extractor:
         self.n_mels = 128
         self.n_mfcc = 32
         self.fmax = 11025
+        
+        self.max_duration_of_loaded_wav = max_duration_of_loaded_wav
 
     def norm(self, y):
         return y / np.max(np.abs(y))
@@ -25,7 +27,7 @@ class Feature_Extractor:
     def mel(self, y):
         assert np.max(y) <= 1, np.max(y)
         mel_spec = librosa.feature.melspectrogram(
-            y,
+            y=y,
             sr=self.sr,
             n_fft=self.n_fft,
             hop_length=self.hop,
@@ -44,7 +46,7 @@ class Feature_Extractor:
     def pcen(self, y):
         assert np.max(y) <= 1
         mel_spec = librosa.feature.melspectrogram(
-            y * (2**32),
+            y=y * (2**32),
             sr=self.sr,
             n_fft=self.n_fft,
             hop_length=self.hop,
@@ -120,7 +122,7 @@ class Feature_Extractor:
 
     def extract_features(self, audio_path):
         result = {}
-        result["waveform"], _ = librosa.load(audio_path, sr=self.sr)
+        result["waveform"], _ = librosa.load(audio_path, sr=self.sr, duration=self.max_duration_of_loaded_wav)
         result["waveform"] = self.norm(result["waveform"])
 
         result["spec"], result["phase"] = librosa.magphase(

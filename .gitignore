@@ -3,4 +3,6 @@ configs/*
 datasets/*
 !datasets/DCASE24/README.md
 
-src/training_pipeline.py
+understanding/*
+
+*__pycache__
