@@ -9,6 +9,7 @@ from data_preprocessing.feature_extractor import Feature_Extractor
 
 EPS = 1e-8
 
+
 def download_DCASE24_Devolopment_Set(development_set_path):
     zipfile_path = os.path.join(development_set_path.split("/")[:-1], "Development_Set.zip")
     print(f"Downloading data to {zipfile_path}")
@@ -93,7 +94,6 @@ def main(development_set_path: str):
     if not os.path.exists(development_set_path):
         download_DCASE24_Devolopment_Set(development_set_path)
     print("DCASE24 development set found.")
-    
     
     # Extract features
     features = ["mel", "logmel", "pcen", "mfcc", "delta_mfcc"]
