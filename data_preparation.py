@@ -181,6 +181,7 @@ def main(development_set_path: str):
     extract_features_from_wav_into_npy(wavfile_paths, features)
     normalize_features(wavfile_paths, features)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-D", "--data-dir", default="./datasets/DCASE24/")

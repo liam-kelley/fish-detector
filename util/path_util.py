@@ -15,4 +15,3 @@ def deep_glob(path: str, suffix: str):
         + glob(os.path.join(path, "*/*/*/*/*/*" + suffix))
     )
     
-

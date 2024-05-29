@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import librosa.display
 from typing import List
 
+
 class Feature_Extractor:
     def __init__(self, max_duration_of_loaded_wav=60):
         """

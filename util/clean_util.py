@@ -2,6 +2,7 @@ import os
 from util.path_util import deep_glob
 from typing import List
 
+
 def clean_from_suffixes(suffixes: List[str], path: str = "./"):
     # Get all files
     files=[]
@@ -17,6 +18,7 @@ def clean_from_suffixes(suffixes: List[str], path: str = "./"):
             print(f"Error removing {file}: {e}")
     
     print(f"Removed all files with {suffixes} suffixes.")
+    
     
 if __name__ == "__main__":
     clean_from_suffixes(suffixes=["npy", "Identifier"])
