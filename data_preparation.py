@@ -173,7 +173,7 @@ def main(development_set_path: str):
     print("DCASE24 development set found.")
     
     # Clean unnecessary files
-    clean_from_suffixes(suffixes=["Identifier"])
+    clean_from_suffixes(path=development_set_path, suffixes=["Identifier"])
     
     # Extract features
     features = ["pcen"] # features = ["mel", "logmel", "pcen", "mfcc", "delta_mfcc"]

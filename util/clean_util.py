@@ -3,7 +3,7 @@ from util.path_util import deep_glob
 from typing import List
 
 
-def clean_from_suffixes(suffixes: List[str], path: str = "./"):
+def clean_from_suffixes(path: str, suffixes: List[str]):
     # Get all files
     files=[]
     for suffix in suffixes:
