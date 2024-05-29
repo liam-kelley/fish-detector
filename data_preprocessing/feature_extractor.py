@@ -2,14 +2,23 @@ import librosa
 import numpy as np
 import matplotlib.pyplot as plt
 import librosa.display
+from typing import List
 
 class Feature_Extractor:
     def __init__(self, max_duration_of_loaded_wav=60):
         """
         Can extract various features from wav files, returns them as a dict.
-        Currently returns these keys : spec, mel, logmel, pcen, mfcc, delta_mfcc
-        Can also return if uncommented : rms, spectral_centroid, spectral_bandwidth, spectral_contrast,
-                            spectral_flatness, spectral_bandwidth, spectral_rolloff, poly_features, zero_crossing_rate
+        
+        Use the extract_features method to extract features.
+        Currently only returns :
+            pcen.
+        
+        Can also return if uncommented :
+            mel, logmel
+            mfcc, delta_mfcc, mel_un_normalized
+            rms, spectral_centroid, spectral_bandwidth, spectral_contrast,
+            spectral_flatness, spectral_bandwidth, spectral_rolloff,
+            poly_features, zero_crossing_rate
         """
 
         self.sr = 22050
@@ -19,6 +28,7 @@ class Feature_Extractor:
         self.n_mfcc = 32
         self.fmax = 11025
         
+        # Added to control length of the long files
         self.max_duration_of_loaded_wav = max_duration_of_loaded_wav
 
     def norm(self, y):
@@ -95,7 +105,13 @@ class Feature_Extractor:
     def delta_mfcc(self, mfcc, order=1, width=9):
         return librosa.feature.delta(mfcc, order=order, width=width)
 
-    def draw_spec(self, matrix, save_path=None, name="temp"):
+    def draw_spec(self, matrix, save_path=None, name="Spectrogram"):
+        '''
+        Use after extracting a spectrogram-like feature.
+        
+        result = fe.extract_features(..., features_to_extract=['pcen'])
+        fe.draw_spec(result['pcen'])
+        '''
         plt.imshow(matrix, aspect="auto", interpolation="none")
         plt.title(name)
         if save_path is not None:
@@ -120,44 +136,57 @@ class Feature_Extractor:
             elif result[k].shape[1] > 1:
                 self.draw_spec(result[k], name=k)
 
-    def extract_features(self, audio_path):
+    def extract_features(self, audio_path : str, features_to_extract : List[str]= ['pcen']) -> dict:
         result = {}
+        
+        # Load Audio
         result["waveform"], _ = librosa.load(audio_path, sr=self.sr, duration=self.max_duration_of_loaded_wav)
+        # Normalize audio to have max 1.0
         result["waveform"] = self.norm(result["waveform"])
 
-        result["spec"], result["phase"] = librosa.magphase(
-            librosa.stft(result["waveform"], hop_length=256, n_fft=1024)
-        )
+        # In the context of automatic speech recognition and acoustic event detection, an
+        # adaptive procedure named per-channel energy normalization (PCEN) has recently 
+        # shown to outperform the pointwise logarithm of mel-frequency spectrogram (logmelspec)
+        # PCEN is pretty much compressing time-invariant noises to same low-level
+        #   + compressing foreground noise to same higher level.
+        if "pcen" in features_to_extract:
+            result["pcen"] = self.pcen(result["waveform"]).astype(np.float32)
         
-        result["mel"] = self.mel(result["waveform"]).astype(np.float32)
-        # result["mel_un_normalized"] = result["mel"]
-        result["logmel"] = self.logmel(result["mel"]).astype(np.float32)
-        result["pcen"] = self.pcen(result["waveform"]).astype(np.float32)
-        result["mfcc"] = self.mfcc(result["logmel"]).astype(np.float32)
-        # result["rms"] = self.rms(result["spec"]).astype(np.float32)
-        # result["spectral_centroid"] = self.spectral_centroid(result["spec"]).astype(np.float32)
-        # result["spectral_bandwidth"] = self.spectral_bandwidth(result["spec"]).astype(np.float32)
-        # result["spectral_contrast"] = self.spectral_contrast(result["spec"], n_bands=6).astype(np.float32)
-        # result["spectral_flatness"] = self.spectral_flatness(result["spec"]).astype(np.float32)
-        # result["spectral_bandwidth"] = self.spectral_bandwidth(result["spec"]).astype(np.float32)
-        # result["spectral_rolloff"] = self.spectral_rolloff(result["spec"]).astype(np.float32)
-        # result["poly_features"] = self.poly_features(result["spec"], order=1).astype(np.float32)
-        # result["zero_crossing_rate"] = self.zero_crossing_rate(result["waveform"]).astype(np.float32)
-        result["delta_mfcc"] = self.delta_mfcc(result["mfcc"], order=1, width=9).astype(
-            np.float32
-        )
+        other_possible_features = ["mel", "logmel",
+                "mfcc", "delta_mfcc", "mel_un_normalized",
+                "rms", "spectral_centroid", "spectral_bandwidth",
+                "spectral_contrast", "spectral_flatness",
+                "spectral_bandwidth", "spectral_rolloff",
+                "poly_features", "zero_crossing_rate"]
+        
+        if any(feature in features_to_extract for feature in other_possible_features):
+            raise NotImplementedError
+            # Other possible features
+            # result["mel"] = self.mel(result["waveform"]).astype(np.float32)
+            # result["logmel"] = self.logmel(result["mel"]).astype(np.float32)
+            # result["mfcc"] = self.mfcc(result["logmel"]).astype(np.float32)
+            # result["delta_mfcc"] = self.delta_mfcc(result["mfcc"], order=1, width=9).astype(np.float32)
+            # result["mel_un_normalized"] = result["mel"]
+            
+            # More possible features
+            # result["spec"], result["phase"] = librosa.magphase(
+            #     librosa.stft(result["waveform"], hop_length=256, n_fft=1024)
+            # )
+            # del result["phase"]
+            # result["rms"] = self.rms(result["spec"]).astype(np.float32)
+            # result["spectral_centroid"] = self.spectral_centroid(result["spec"]).astype(np.float32)
+            # result["spectral_bandwidth"] = self.spectral_bandwidth(result["spec"]).astype(np.float32)
+            # result["spectral_contrast"] = self.spectral_contrast(result["spec"], n_bands=6).astype(np.float32)
+            # result["spectral_flatness"] = self.spectral_flatness(result["spec"]).astype(np.float32)
+            # result["spectral_bandwidth"] = self.spectral_bandwidth(result["spec"]).astype(np.float32)
+            # result["spectral_rolloff"] = self.spectral_rolloff(result["spec"]).astype(np.float32)
+            # result["poly_features"] = self.poly_features(result["spec"], order=1).astype(np.float32)
+            # result["zero_crossing_rate"] = self.zero_crossing_rate(result["waveform"]).astype(np.float32)
 
-        # result["mel"] = result["mel"].T
-        # result["mfcc"] = result["mfcc"].T
-
-        # del result['mel'] # TODO
-
-        # del result['spec']
-        del result["phase"]
         del result["waveform"]
 
+        # Transpose features
         for k in result.keys():
             result[k] = result[k].T
 
-        # return {"mel_un_normalized": result["mel_un_normalized"]}
         return result
