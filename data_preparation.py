@@ -78,7 +78,7 @@ def extract_features_from_wav_into_npy(wavfile_paths : List[str], features : Lis
             extracted_features = fe.extract_features(file, features)
             
             for feature in extracted_features.keys():
-                npy_path = file.replace(".wav", "_%s.npy" % feature)
+                npy_path = file.replace(".wav", f"_{feature}.npy")
                 np.save(npy_path, extracted_features[feature])
         except KeyboardInterrupt:
             exit()
