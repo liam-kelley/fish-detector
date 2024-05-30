@@ -7,19 +7,19 @@ import pandas as pd
 from itertools import chain
 import librosa
 import numpy as np
+import random
 
 class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
     def __init__(self,
                  paths: dict = {"train_dir": "datasets/DCASE24/Development_Set/Training_Set",
                                 "val_dir": "datasets/DCASE24/Development_Set/Validation_Set",},
                  features: list[str] = ["pcen"],
-                 train_param: dict = {"n_shot": 5,
-                                    "k_way": 1,
-                                    "segment_len": 100},
+                 train_param: dict = {"segment_len": 100},
                  dataset_param: dict = {"margin_around_sequences": 0.25,
                                         "remove_short_max_negative_duration": True,
                                         "remove_short_max_negative_duration_threshold": 0.3,
-                                        "mode": None},
+                                        "mode": None,
+                                        "return_negative_events": True},
                  preprocessing_param: dict = {"pcen_frames_per_second" : 50}
                  ):
         """
@@ -301,7 +301,7 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
             pcen = pcen[:seg_len]
         else:
             # get random start frame
-            rand_start_frame = np.random.randint(low=start_frame, high=end_frame - seg_len)
+            rand_start_frame = random.randint(start_frame, end_frame - 1 - seg_len) # TODO check if not off by one
             # Load pcen
             pcen = pcen_memmap[rand_start_frame : rand_start_frame + seg_len]
         
@@ -310,8 +310,14 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         return pcen
 
     def __len__(self):
-        '''Returns total number of positive events.'''
-        return len(self.df[self.df["POS_NEG"] == self.POS_NEG_map["POS"]])
+        '''
+        Returns total number of positive events * 2 if you return negative events
+        else returns only number of positive events.
+        '''
+        if self.dataset_param["return_negative_events"]:
+            return len(self.df[self.df["POS_NEG"] == self.POS_NEG_map["POS"]]) * 2
+        else:
+            return len(self.df[self.df["POS_NEG"] == self.POS_NEG_map["POS"]])
     
     def __getitem__(self, idx):
         # Load an event
@@ -371,6 +377,14 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         Thankfully, this method returns a list of the indexes relevant for each
             class / POS_NEG pairing, so that the episodic sampler has an easy
             time sending the correct index to this dataset's __getitem__ method.
+            
+        index lists structure
+        {
+            "CLSA_POS": [48,49,...,68],
+            "CLSA_NEG": [121,122,...,248],
+            "CLSB_POS": [69,70,...,120],
+            ...
+        }
         '''
         # Get relevant class_list
         if self.mode == "train":
@@ -380,9 +394,15 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         else:
             class_list = self.all_classes
         
+        # Manage case where negative events aren't used
+        if self.dataset_param['return_negative_events']:
+            pos_neg_list = ["POS","NEG"]
+        else:
+            pos_neg_list = ["POS"]
+        
         index_lists = {}
         for cls in class_list:
-            for pos_neg in ["POS","NEG"]:
+            for pos_neg in pos_neg_list:
                 cls_numerical = self.class_name_map[cls]
                 pos_neg_numerical = self.POS_NEG_map[pos_neg]
                 
