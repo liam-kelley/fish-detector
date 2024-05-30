@@ -8,7 +8,7 @@ from itertools import chain
 import librosa
 import numpy as np
 
-class DCASE24_Sound_Events_Dataset(torch.utils.data.Dataset):
+class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
     def __init__(self,
                  paths: dict = {"train_dir": "datasets/DCASE24/Development_Set/Training_Set",
                                 "val_dir": "datasets/DCASE24/Development_Set/Validation_Set",},
@@ -18,16 +18,13 @@ class DCASE24_Sound_Events_Dataset(torch.utils.data.Dataset):
                                     "segment_len": 100},
                  dataset_param: dict = {"margin_around_sequences": 0.25,
                                         "remove_short_max_negative_duration": True,
-                                        "remove_short_max_negative_duration_threshold": 0.3},
+                                        "remove_short_max_negative_duration_threshold": 0.3,
+                                        "mode": None},
                  preprocessing_param: dict = {"pcen_frames_per_second" : 50}
                  ):
         """
-        Objectives:
-        Get Training data.
-        Get Validation data.
-        Get Fine-tuning data. (first 5 of validation)
-        
-        Use the first five annotation in the validation files to construct the training dataset
+        Useful for all your task5 needs.
+        TODO : loading multiple types of features at once. But right now I'm mostly interested in pcen.
         """
         self.paths = paths
         self.features = features
@@ -55,8 +52,15 @@ class DCASE24_Sound_Events_Dataset(torch.utils.data.Dataset):
         self.class_index_map = {v: k for k, v in self.class_name_map.items()} # key = unique int, value = class name
 
         self.df = self._convert_meta_dict_to_event_dataframe()
-        self.train_df , self.val_df = self._separate_df_into_train_and_val()
-        del self.meta # df is preferred  
+        del self.meta # df is preferred
+        
+        ##### SET A SPECIFIC MODE (train, val) #####
+        
+        self.archival_df = None
+        if self.dataset_param["mode"] == "train":
+            self.set_training_mode()
+        elif self.dataset_param["mode"] == "val":
+            self.set_validation_mode()
     
     def _get_df_positive_rows(self, file : str) -> pd.DataFrame:
         """
@@ -264,14 +268,7 @@ class DCASE24_Sound_Events_Dataset(torch.utils.data.Dataset):
 
         return pd.DataFrame(event_dict)
 
-    def _separate_df_into_train_and_val(self):
-        train_classes_numerical = [self.class_name_map[cls] for cls in self.train_classes]
-        val_classes_numerical = [self.class_name_map[cls] for cls in self.val_classes]
-        
-        return (self.df[self.df["class"] in train_classes_numerical],
-                self.df[self.df["class"] in val_classes_numerical])
-
-    def get_pcen_segment(self, event_info):
+    def _get_pcen_segment(self, event_info):
         # init event info
         pcen_filename = event_info['filename'].split(".")[-2] + "_pcen.npy"
         start_frame = int(event_info["start_time"] * self.preprocessing_param["pcen_frames_per_second"])
@@ -312,13 +309,45 @@ class DCASE24_Sound_Events_Dataset(torch.utils.data.Dataset):
         event_info = self.df.iloc[idx] # "class", "POS_NEG", "filename" ,"start_time" ,"end_time"
         
         # Get segment from precomputed pcen filename beginning at start_time and ending at end time (fixed segment length)
-        pcen_segment = self.get_pcen_segment(event_info)
+        pcen_segment = self._get_pcen_segment(event_info)
     
         # Get class name + positivity or negativity of segment
         event_class_name = self.class_index_map[event_info["class"]]
         event_pos_neg = event_info["POS_NEG"]
         
         return pcen_segment, event_class_name, event_pos_neg
+
+    def set_training_mode(self):
+        '''
+        Updates the dataframe to only load training classes.
+        '''
+        if not self.archival_df:
+            self.archival_df = self.df.copy()
+            
+        train_classes_numerical = [self.class_name_map[cls] for cls in self.train_classes]
+        
+        # Only keep training classes
+        self.df = self.archival_df[self.archival_df["class"] in train_classes_numerical]
+    
+    def set_validation_mode(self):
+        '''
+        Updates the dataframe to only load validation classes.
+        '''
+        if not self.archival_df:
+            self.archival_df = self.df.copy()
+            
+        val_classes_numerical = [self.class_name_map[cls] for cls in self.val_classes]
+        
+        # Only keep validation classes
+        self.df = self.archival_df[self.archival_df["class"] in val_classes_numerical]
+        
+    def set_full_default_mode(self):
+        '''
+        Updates the dataframe to load all classes. Why would you need this? Idk
+        Only useful if you previously transformed this dataset into a traing or validation
+        '''
+        if self.archival_df:
+            self.df = self.archival_df.copy()
 
     def get_class_indexes_for_sampler(self):
         raise NotImplementedError
