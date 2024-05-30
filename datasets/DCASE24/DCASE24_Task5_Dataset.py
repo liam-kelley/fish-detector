@@ -394,7 +394,7 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         else:
             class_list = self.all_classes
         
-        # Manage case where negative events aren't used
+        # Manage case where negative events aren't used : don't send negative class indexes to episodic sampler. 
         if self.dataset_param['return_negative_events']:
             pos_neg_list = ["POS","NEG"]
         else:
