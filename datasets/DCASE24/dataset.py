@@ -271,23 +271,6 @@ class DCASE24_Sound_Events_Dataset(torch.utils.data.Dataset):
         return (self.df[self.df["class"] in train_classes_numerical],
                 self.df[self.df["class"] in val_classes_numerical])
 
-    def __len__(self):
-        '''Returns total number of positive events.'''
-        return len(self.df[self.df["POS_NEG"] == self.POS_NEG_map["POS"]])
-    
-    def __getitem__(self, idx):
-        # Load an event
-        event_info = self.df.iloc[idx] # "class", "POS_NEG", "filename" ,"start_time" ,"end_time"
-        
-        # Get segment from precomputed pcen filename beginning at start_time and ending at end time (fixed segment length)
-        pcen_segment = self.get_pcen_segment(event_info)
-    
-        # Get class name + positivity or negativity of segment
-        event_class_name = self.class_index_map[event_info["class"]]
-        event_pos_neg = event_info["POS_NEG"]
-        
-        return pcen_segment, event_class_name, event_pos_neg
-    
     def get_pcen_segment(self, event_info):
         # init event info
         pcen_filename = event_info['filename'].split(".")[-2] + "_pcen.npy"
@@ -319,6 +302,23 @@ class DCASE24_Sound_Events_Dataset(torch.utils.data.Dataset):
         # sanity check
         assert pcen.shape[0] == seg_len
         return pcen
+
+    def __len__(self):
+        '''Returns total number of positive events.'''
+        return len(self.df[self.df["POS_NEG"] == self.POS_NEG_map["POS"]])
+    
+    def __getitem__(self, idx):
+        # Load an event
+        event_info = self.df.iloc[idx] # "class", "POS_NEG", "filename" ,"start_time" ,"end_time"
+        
+        # Get segment from precomputed pcen filename beginning at start_time and ending at end time (fixed segment length)
+        pcen_segment = self.get_pcen_segment(event_info)
+    
+        # Get class name + positivity or negativity of segment
+        event_class_name = self.class_index_map[event_info["class"]]
+        event_pos_neg = event_info["POS_NEG"]
+        
+        return pcen_segment, event_class_name, event_pos_neg
 
     def get_class_indexes_for_sampler(self):
         raise NotImplementedError
