@@ -344,7 +344,7 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
     def set_full_default_mode(self):
         '''
         Updates the dataframe to load all classes. Why would you need this? Idk
-        Only useful if you previously transformed this dataset into a traing or validation
+        Only useful if you previously transformed this dataset into a training or validation mode.
         '''
         if self.archival_df:
             self.df = self.archival_df.copy()
