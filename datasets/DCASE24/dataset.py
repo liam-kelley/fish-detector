@@ -45,6 +45,7 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         self.meta = {} # Metadata dictionnary. See structure in self._build_meta docstring.
         self._build_meta()
         self.all_classes = list(self.meta.keys())
+        self._update_train_val_classes()
         
         # Create some maps to have numerical values in the dataframe instead of strings
         self.POS_NEG_map = {"NEG": 0, "POS": 1}
@@ -57,6 +58,7 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         ##### SET A SPECIFIC MODE (train, val) #####
         
         self.archival_df = None
+        self.mode = "default"
         if self.dataset_param["mode"] == "train":
             self.set_training_mode()
         elif self.dataset_param["mode"] == "val":
@@ -239,7 +241,14 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
             self._remove_short_max_negative_duration()
         
         print("Meta data build done.")
-        
+    
+    def _update_train_val_classes(self):
+        '''
+        Just in case some classes dissappeared during meta dictionnary building.
+        '''
+        self.train_classes = set.intersection(set(self.all_classes), set(self.train_classes))
+        self.val_classes = set.intersection(set(self.all_classes), set(self.val_classes))
+    
     def _convert_meta_dict_to_event_dataframe(self):
         event_dict = {
             "class": [],
@@ -306,7 +315,7 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
     
     def __getitem__(self, idx):
         # Load an event
-        event_info = self.df.iloc[idx] # "class", "POS_NEG", "filename" ,"start_time" ,"end_time"
+        event_info = self.df.loc[idx] # "class", "POS_NEG", "filename" ,"start_time" ,"end_time" # using loc for index consistency
         
         # Get segment from precomputed pcen filename beginning at start_time and ending at end time (fixed segment length)
         pcen_segment = self._get_pcen_segment(event_info)
@@ -319,7 +328,7 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
 
     def set_training_mode(self):
         '''
-        Updates the dataframe to only load training classes.
+        Updates the dataframe to only show training classes.
         '''
         if not self.archival_df:
             self.archival_df = self.df.copy()
@@ -328,10 +337,12 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         
         # Only keep training classes
         self.df = self.archival_df[self.archival_df["class"] in train_classes_numerical]
+        
+        self.mode = "train"
     
     def set_validation_mode(self):
         '''
-        Updates the dataframe to only load validation classes.
+        Updates the dataframe to only show validation classes.
         '''
         if not self.archival_df:
             self.archival_df = self.df.copy()
@@ -341,13 +352,40 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         # Only keep validation classes
         self.df = self.archival_df[self.archival_df["class"] in val_classes_numerical]
         
+        self.mode = "val"
+        
     def set_full_default_mode(self):
         '''
-        Updates the dataframe to load all classes. Why would you need this? Idk
+        Updates the dataframe to show all classes. Why would you need this? Idk
         Only useful if you previously transformed this dataset into a training or validation mode.
         '''
         if self.archival_df:
             self.df = self.archival_df.copy()
 
-    def get_class_indexes_for_sampler(self):
-        raise NotImplementedError
+    def get_class_indexes_for_episodic_sampler(self):
+        '''
+        Using a dataframe to log all events with a unique index for each event
+            is annoying when you want to do some episodic training.
+        Thankfully, this method returns a list of the indexes relevant for each
+            class / POS_NEG pairing, so that the episodic sampler has an easy
+            time sending the correct index to this dataset's __getitem__ method.
+        '''
+        # Get relevant class_list
+        if self.mode == "train":
+            class_list = self.train_classes
+        elif self.mode == "val":
+            class_list = self.val_classes
+        else:
+            class_list = self.all_classes
+        
+        index_lists = {}
+        for cls in class_list:
+            for pos_neg in ["POS","NEG"]:
+                cls_numerical = self.class_name_map[cls]
+                pos_neg_numerical = self.POS_NEG_map[pos_neg]
+                
+                # Get all indexes where class is class and pos_neg is pos_neg
+                cls_pos_neg_boolean_series = (self.df["class"] == cls_numerical) & (self.df["POS_NEG"] == pos_neg_numerical)
+                index_lists[f"{cls}_{pos_neg}"] = list(self.df[cls_pos_neg_boolean_series].index)
+        
+        return index_lists
