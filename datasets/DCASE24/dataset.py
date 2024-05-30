@@ -58,7 +58,7 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         ##### SET A SPECIFIC MODE (train, val) #####
         
         self.archival_df = None
-        self.mode = "default"
+        self.mode = "all"
         if self.dataset_param["mode"] == "train":
             self.set_training_mode()
         elif self.dataset_param["mode"] == "val":
@@ -354,13 +354,15 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         
         self.mode = "val"
         
-    def set_full_default_mode(self):
+    def set_all_mode(self):
         '''
         Updates the dataframe to show all classes. Why would you need this? Idk
         Only useful if you previously transformed this dataset into a training or validation mode.
         '''
         if self.archival_df:
             self.df = self.archival_df.copy()
+        
+        self.mode = "all"
 
     def get_class_indexes_for_episodic_sampler(self):
         '''
