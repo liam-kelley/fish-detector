@@ -3,7 +3,8 @@ datasets/*
 datasets/DCASE24/*
 !datasets/DCASE24/README.md
 !datasets/DCASE24/dataset.py
-
+!datasets/DCASE24/DCASE24_Task5_Dataset.py
+!datasets/DCASE24/DCASE24_Task5_Sampler.py
 
 understanding/*
 

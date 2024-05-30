@@ -1,3 +1,4 @@
 # DCASE 24 Development set
 
-You can download the DCASE24 Development set here.
+You can download and unzip the DCASE24 Development set here.
+This can be done automatically via the data preparation script in the root folder.
