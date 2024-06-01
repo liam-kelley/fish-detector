@@ -1,10 +1,7 @@
 import torch
-import os
-import glob
 from util.path_util import deep_glob
 import tqdm
 import pandas as pd
-from itertools import chain
 import librosa
 import numpy as np
 import random
@@ -19,18 +16,17 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
                                         "remove_short_max_negative_duration": True,
                                         "remove_short_max_negative_duration_threshold": 0.3,
                                         "mode": None,
-                                        "return_negative_events": True},
-                 preprocessing_param: dict = {"pcen_frames_per_second" : 50}
+                                        "return_negative_events": True,
+                                        "sample_rate":16000}
                  ):
         """
         Useful for all your task5 needs.
-        TODO : loading multiple types of features at once. But right now I'm mostly interested in pcen.
+        Loads positive (and negative events if return_negative_events flag activated) as wav.
         """
         self.paths = paths
         self.features = features
         self.train_param = train_param
         self.dataset_param = dataset_param
-        self.preprocessing_param = preprocessing_param
         
         ##### GET CSV FILES #####
 
@@ -277,38 +273,6 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
 
         return pd.DataFrame(event_dict)
 
-    def _get_pcen_segment(self, event_info):
-        # init event info
-        pcen_filename = event_info['filename'].split(".")[-2] + "_pcen.npy"
-        start_frame = int(event_info["start_time"] * self.preprocessing_param["pcen_frames_per_second"])
-        if start_frame < 0 :
-            start_frame = 0
-        end_frame = int(event_info["end_time"] * self.preprocessing_param["pcen_frames_per_second"])
-        event_duration = end_frame - start_frame
-        seg_len = self.train_param["segment_len"]
-        
-        # Prepare loading from memory.
-        pcen_memmap = np.load(pcen_filename, mmap_mode='r')
-        
-        # If too small duration, tile; if too big, take random segment insde the event
-        if event_duration < seg_len:
-            # Load pcen
-            pcen = np.array(pcen_memmap[start_frame:end_frame])
-            # Tile until big enough
-            tile_times = np.ceil(seg_len / event_duration)
-            pcen = np.tile(pcen, (int(tile_times), 1)) # tile along time axis
-            # Crop to correct length
-            pcen = pcen[:seg_len]
-        else:
-            # get random start frame
-            rand_start_frame = random.randint(start_frame, end_frame - 1 - seg_len) # TODO check if not off by one
-            # Load pcen
-            pcen = pcen_memmap[rand_start_frame : rand_start_frame + seg_len]
-        
-        # sanity check
-        assert pcen.shape[0] == seg_len
-        return pcen
-
     def __len__(self):
         '''
         Returns total number of positive events * 2 if you return negative events
@@ -319,18 +283,63 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
         else:
             return len(self.df[self.df["POS_NEG"] == self.POS_NEG_map["POS"]])
     
+    def _get_segment(self, event_info):
+        """
+        Loads a fixed-length wav segment.
+        """
+        # init event info
+        wav_filename = event_info['filename']
+        start_time = event_info["start_time"]
+        if start_time < 0 :
+            start_time = 0
+        end_time = event_info["end_time"]
+        event_duration = abs(end_time - start_time)
+        seg_len = self.train_param["segment_len"]
+        sr = self.dataset_param["sample_rate"]
+        
+        # If too small duration, tile; if too big, take random segment insde the event
+        if event_duration < seg_len:
+            # Load wav segment
+            wav_segment = librosa.load(
+                path=wav_filename,
+                offset=start_time, # in seconds
+                duration=event_duration, # in seconds
+                sr=sr
+            )
+            # Tile until big enough
+            tile_times = np.ceil(seg_len / (event_duration*sr))
+            wav_segment = np.tile(wav_segment, (int(tile_times), 1)) # tile along time axis
+            # Crop to correct length
+            wav_segment = wav_segment[:seg_len]
+        else:
+            # get random start frame
+            rand_start_time = random.randint(start_time, end_time - (seg_len/sr)) # TODO check if not off by one
+            # Load wav segment
+            wav_segment = librosa.load(
+                path=wav_filename,
+                offset=start_time, # in seconds
+                duration=seg_len/sr, # in seconds
+                sr=sr 
+            )
+            # Crop to correct length
+            wav_segment = wav_segment[:seg_len]
+        
+        # sanity check
+        assert wav_segment.shape[0] == seg_len
+        return wav_segment
+    
     def __getitem__(self, idx):
         # Load an event
         event_info = self.df.loc[idx] # "class", "POS_NEG", "filename" ,"start_time" ,"end_time" # using loc for index consistency
         
-        # Get segment from precomputed pcen filename beginning at start_time and ending at end time (fixed segment length)
-        pcen_segment = self._get_pcen_segment(event_info)
-    
+        # Load segment, override this method to load different types of features or maybe even multiple features at once.
+        segment = self._get_segment(event_info)
+        
         # Get class name + positivity or negativity of segment
         event_class_name = self.class_index_map[event_info["class"]]
         event_pos_neg = event_info["POS_NEG"]
         
-        return pcen_segment, event_class_name, event_pos_neg
+        return segment, event_class_name, event_pos_neg
 
     def set_training_mode(self):
         '''
@@ -411,3 +420,61 @@ class DCASE24_Task5_Dataset(torch.utils.data.Dataset):
                 index_lists[f"{cls}_{pos_neg}"] = list(self.df[cls_pos_neg_boolean_series].index)
         
         return index_lists
+
+
+class DCASE24_Task5_Dataset_PCEN(DCASE24_Task5_Dataset):
+    def __init__(self,
+                 paths: dict = {"train_dir": "datasets/DCASE24/Development_Set/Training_Set",
+                                "val_dir": "datasets/DCASE24/Development_Set/Validation_Set",},
+                 features: list[str] = ["pcen"],
+                 train_param: dict = {"segment_len": 100},
+                 dataset_param: dict = {"margin_around_sequences": 0.25,
+                                        "remove_short_max_negative_duration": True,
+                                        "remove_short_max_negative_duration_threshold": 0.3,
+                                        "mode": None,
+                                        "return_negative_events": True},
+                 preprocessing_param: dict = {"pcen_frames_per_second" : 50}
+                 ):
+        """
+        Useful for all your task5 needs.
+        # TODO : test and figure out how pcen frames per second work.
+        # TODO : test if memmap works
+        # TODO : loading multiple types of features at once. But right now I'm mostly interested in pcen.
+        """
+        super().__init__(paths, features, train_param, dataset_param)
+        self.preprocessing_param = preprocessing_param
+        
+    def _get_segment(self, event_info):
+        """
+        Overriding original method to load fixed-length PCEN segments.
+        """
+        # init event info
+        pcen_filename = event_info['filename'].split(".")[-2] + "_pcen.npy"
+        start_frame = int(event_info["start_time"] * self.preprocessing_param["pcen_frames_per_second"])
+        if start_frame < 0 :
+            start_frame = 0
+        end_frame = int(event_info["end_time"] * self.preprocessing_param["pcen_frames_per_second"])
+        event_duration = end_frame - start_frame
+        seg_len = self.train_param["segment_len"]
+        
+        # Prepare loading from memory.
+        pcen_memmap = np.load(pcen_filename, mmap_mode='r')
+        
+        # If too small duration, tile; if too big, take random segment insde the event
+        if event_duration < seg_len:
+            # Load pcen segment
+            pcen_segment = np.array(pcen_memmap[start_frame:end_frame])
+            # Tile until big enough
+            tile_times = np.ceil(seg_len / event_duration)
+            pcen_segment = np.tile(pcen_segment, (int(tile_times), 1)) # tile along time axis
+            # Crop to correct length
+            pcen_segment = pcen_segment[:seg_len]
+        else:
+            # get random start frame
+            rand_start_frame = random.randint(start_frame, end_frame - 1 - seg_len) # TODO check if not off by one
+            # Load pcen_segment
+            pcen_segment = pcen_memmap[rand_start_frame : rand_start_frame + seg_len]
+        
+        # sanity check
+        assert pcen_segment.shape[0] == seg_len
+        return pcen_segment

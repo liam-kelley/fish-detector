@@ -148,8 +148,9 @@ class Feature_Extractor:
         # In the context of automatic speech recognition and acoustic event detection, an
         # adaptive procedure named per-channel energy normalization (PCEN) has recently 
         # shown to outperform the pointwise logarithm of mel-frequency spectrogram (logmelspec)
-        # PCEN is pretty much compressing time-invariant noises to same low-level
-        #   + compressing foreground noise to same higher level.
+        # PCEN is pretty much compressing time-invariant noises to a constant low-level
+        #   + compressing foreground noise to a constant higher level.
+        # A time threshold differentiates between long noises and short noises
         if "pcen" in features_to_extract:
             result["pcen"] = self.pcen(result["waveform"]).astype(np.float32)
         
@@ -161,7 +162,7 @@ class Feature_Extractor:
                 "poly_features", "zero_crossing_rate"]
         
         if any(feature in features_to_extract for feature in other_possible_features):
-            raise NotImplementedError
+            raise NotImplementedError, "Please modify the feature extractor script to extract these features. The code is probably just commented."
             # Other possible features
             # result["mel"] = self.mel(result["waveform"]).astype(np.float32)
             # result["logmel"] = self.logmel(result["mel"]).astype(np.float32)
